@@ -1,0 +1,47 @@
+k_fold: 3
+
+# sample directory
+input_path: "/lustre/collider/mocen/project/multilepton/yulei/best_train/Output/"
+
+# output sample directory
+output_path: 'Output'
+
+
+# hyperparameters in the training
+hyper_parameters:
+  svb_weight_ratio: "5"
+  max_depth: "5"
+  eta: "0.083079918"
+
+
+# for optimization only
+optimization:
+  hyper_parameters:
+    eta: [0.05, 0.5]
+    max_depth: [2, 10, 1]
+    svb_weight_ratio: [1, 20]
+      
+training_parameters:
+  variables:
+    - FlavorCat
+    - met_met
+    - M_llljj
+    - M_lll
+    - HT
+    - HT_jets
+    - HT_lep
+    - best_Z_Mll
+    - M_l0l1
+    - M_l0l2
+    - M_l1l2
+    - dR_l0l1
+    - dR_l0l2
+    - dR_l1l2
+    - dR_l0j
+    - dR_l1j
+    - dR_l2j
+    - M_l0j
+    - M_l1j
+    - M_l2j
+    - minOSMll
+    - minOSSFMll
