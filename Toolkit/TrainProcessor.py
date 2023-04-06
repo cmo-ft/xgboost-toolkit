@@ -54,8 +54,8 @@ class TrainProcessor:
         # Default train param
         import platform
         train_param = {
-            # "tree_method": "gpu_hist" if platform.system() != 'Darwin' else 'hist',
-            "tree_method": 'hist',
+            "tree_method": "gpu_hist" if platform.system() != 'Darwin' else 'hist',
+            # "tree_method": 'hist',
             "objective": "binary:logistic",
             'eval_metric': ['logloss'],
         }
