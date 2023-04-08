@@ -25,37 +25,42 @@ class TrainProcessor:
         self.variables = variables
 
 
-    def train(self, hyper_parameters, if_save_result=True, verbose=1):
         data_file = ur.open(self.ntuple)
-        sig_train = data_file["sig_train"].arrays(library='pd')
-        sig_test = data_file["sig_test"].arrays(library='pd')
-        bkg_train = data_file["bkg_train"].arrays(library='pd')
-        bkg_test = data_file["bkg_test"].arrays(library='pd')
+        self.sig_train = data_file["sig_train"].arrays(library='pd')
+        self.sig_test = data_file["sig_test"].arrays(library='pd')
+        self.bkg_train = data_file["bkg_train"].arrays(library='pd')
+        self.bkg_test = data_file["bkg_test"].arrays(library='pd')
+
+        self.df_train = pd.concat([self.sig_train, self.bkg_train])
+        self.label_train = np.array( [[1]*len(self.sig_train) + [0]*len(self.bkg_train)] )
+        self.df_test = pd.concat([self.sig_test, self.bkg_test])
+        self.label_test = np.array( [1]*len(self.sig_test) + [0]*len(self.bkg_test) )
+
+
+    def train(self, hyper_parameters, if_save_result=True, verbose=1):
 
         self.weight_signal = float(hyper_parameters['svb_weight_ratio'])
         self.weight_bkg = 1
 
-        df_train = pd.concat([sig_train, bkg_train])
-        weight_train = np.concatenate([[self.weight_signal]*len(sig_train) + [self.weight_bkg]*len(bkg_train)])
+        weight_train = np.concatenate([[self.weight_signal]*len(self.sig_train) + [self.weight_bkg]*len(self.bkg_train)])
         # weight_train = weight_train / weight_train.sum()
-        self.dtrain = xgb.DMatrix(data=df_train[self.variables].to_numpy(),
-                              label=np.array( [[1]*len(sig_train) + [0]*len(bkg_train)] ),
+        self.dtrain = xgb.DMatrix(data=self.df_train[self.variables].to_numpy(),
+                              label=self.label_train,
                               weight=weight_train
                              )
 
-        df_test = pd.concat([sig_test, bkg_test])
         # no weight on test set
         # weight_test = np.concatenate([[self.weight_signal]*len(sig_test) + [self.weight_bkg]*len(bkg_test)])
-        self.dtest = xgb.DMatrix(data=df_test[self.variables].to_numpy(),
-                                  label=np.array( [[1]*len(sig_test) + [0]*len(bkg_test)] ),
+        self.dtest = xgb.DMatrix(data=self.df_test[self.variables].to_numpy(),
+                                  label=self.label_test,
                                 #   weight=weight_test
                                   )
 
         # Default train param
         import platform
         train_param = {
-            # "tree_method": "gpu_hist" if platform.system() != 'Darwin' else 'hist',
-            "tree_method": 'hist',
+            "tree_method": "gpu_hist" if platform.system() != 'Darwin' else 'hist',
+            # "tree_method": 'hist',
             "objective": "binary:logistic",
             'eval_metric': ['logloss'],
         }
@@ -81,18 +86,21 @@ class TrainProcessor:
 
         loss = bst.eval(self.dtest)
         loss = float(loss.split(':')[1])
+        # significance_with_min_bkg, _ = get_significance(test_preds, self.dtest.get_label(), df_test['weight'].to_numpy())
+        # loss = -significance_with_min_bkg
+
         # save result
         if if_save_result:
 
             bst.save_model(os.path.join(self.out_dir, 'xgboost_model.json'))
 
             with ur.recreate(os.path.join(self.out_dir, 'xgboost_output.root')) as f:
-                test_to_save = df_test.copy()
+                test_to_save = self.df_test.copy()
                 test_to_save['scores'] = test_preds
                 test_to_save['labels'] = self.dtest.get_label()
                 f["TestTree"] = test_to_save
 
-                train_to_save = df_train.copy()
+                train_to_save = self.df_train.copy()
                 train_to_save['scores'] = train_preds
                 train_to_save['labels'] = self.dtrain.get_label()
                 f["TrainTree"] = train_to_save
@@ -100,5 +108,6 @@ class TrainProcessor:
             print(f"===> wrote trainning result {self.out_dir}\n")
         if verbose:
             print("===> xgboost training is done!\n")
-        return loss, bst
+            print(f"===> loss: {loss}") 
+        return loss, bst, test_preds
 

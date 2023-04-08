@@ -2,9 +2,29 @@ import uproot as ur
 import hyperopt as hopt
 import platform
 import os
+import numpy as np
 
 from .TrainProcessor import TrainProcessor
 import xgboost_bin.eval as eval
+
+def get_significance(score, label, weight):
+    mask_sig, mask_bkg = (label==1), (label==0)
+    score_sig, score_bkg = score[mask_sig], score[mask_bkg]
+    weight_sig, weight_bkg = weight[mask_sig], weight[mask_bkg]
+
+    
+    bins = np.linspace(0, 1, num=200, endpoint=True)
+    hist_sig, _ = np.histogram(score_sig, bins=bins, weights=weight_sig)
+    hist_bkg, _ = np.histogram(score_bkg, bins=bins, weights=weight_bkg)
+    s = np.cumsum(hist_sig[::-1])[::-1]
+    b = np.cumsum(hist_bkg[::-1])[::-1]
+
+    significance = (s / np.sqrt(s + b))
+    significance[np.isnan(significance)] = 0
+    significance_with_min_bkg = max([(y, x) for x, y in enumerate(significance) if b[x] > 1.0])
+    
+    return significance_with_min_bkg[0], max(significance)
+
 
 class HyperOptProcessor:
     def __init__(self, config):
@@ -25,10 +45,17 @@ class HyperOptProcessor:
                 "max_depth": int(args['max_depth']),
                 "eta": float(args['eta']),
             }
-            loss = 0
-            for trainer in self.trainers:
-                ls, _ = trainer.train(train_param, if_save_result=False, verbose=0)
-                loss += ls
+            # loss = 0
+            scores, labels, weights = [], [], []
+            for fold, trainer in enumerate(self.trainers):
+                ls, _, score = trainer.train(train_param, if_save_result=False, verbose=0)
+                scores.append(score)
+                labels.append(trainer.label_test)
+                weights.append(trainer.df_test['weight'].to_numpy())
+                # loss += ls
+            significance, _ = get_significance(np.concatenate(scores), np.concatenate(labels), np.concatenate(weights) )
+            loss = -significance
+
             return {'loss': loss, 'status': hopt.STATUS_OK}
 
 
@@ -64,7 +91,7 @@ class HyperOptProcessor:
         outfile_list = []
         for k, trainer in enumerate(self.trainers):
             trainer.out_dir = os.path.join(self.out_dir, f'fold_{k}')
-            ls, _ = trainer.train(train_param, if_save_result=True, verbose=1)
+            ls, _, _ = trainer.train(train_param, if_save_result=True, verbose=1)
             print(f'fold_{k} loss: {ls}')
             loss += ls
             outfile_list.append(os.path.join(trainer.out_dir, 'xgboost_output.root'))

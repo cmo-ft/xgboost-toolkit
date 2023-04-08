@@ -16,6 +16,8 @@ hyper_parameters:
 
 # for optimization only
 optimization:
+  max_evals:
+    100
   hyper_parameters:
     eta: [0.05, 0.5]
     max_depth: [2, 10, 1]

@@ -11,7 +11,7 @@ def merge_scores(config):
     target_dir =  os.path.join(config['output_path'], 'eval')
     merge_target = os.path.join(target_dir, 'xgboost_output.root')
     if not os.path.exists(target_dir):
-        os.makedirs(os.path.dirname(target_dir))
+        os.makedirs(target_dir)
 
     # Loop over the input files and concatenate the TestTrees
     files = [ur.open(file_name) for file_name in outfile_list]
